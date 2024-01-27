@@ -1,0 +1,67 @@
+import os
+import matplotlib.pyplot as plt
+
+# Get the path to the desktop
+desktop_path = os.path.join(os.path.expanduser("~"), 'Desktop', 'mort')
+
+# Replace 'your_file.dat' with the actual file name
+file_name1 = 'PM1918R002.dat'
+file_name2 = 'PM1918R005.dat'
+
+# Construct the full paths to the DAT files on the desktop
+file_path1 = os.path.join(desktop_path, file_name1)
+file_path2 = os.path.join(desktop_path, file_name2)
+
+# Read data from the first DAT file, skipping header lines
+with open(file_path1, 'r') as file1:
+    lines1 = file1.readlines()
+
+# Read data from the second DAT file, skipping header lines
+with open(file_path2, 'r') as file2:
+    lines2 = file2.readlines()
+
+# Find the index where the actual data starts (after "End of Header")
+data_start_index1 = lines1.index("End of Header\n") + 1
+data_start_index2 = lines2.index("End of Header\n") + 1
+
+# Separate x and y data for the first file
+x_data1 = []
+y_data1 = []
+for line in lines1[data_start_index1:]:
+    try:
+        # Convert values to floats
+        value = float(line)
+        x_data1.append(len(x_data1) + 1)  # Use an incremental index as x-axis values
+        y_data1.append(value)
+    except ValueError:
+        # Handle lines that are not valid floats
+        print(f"Skipping line in file 1: {line}")
+
+# Separate x and y data for the second file
+x_data2 = []
+y_data2 = []
+for line in lines2[data_start_index2:]:
+    try:
+        # Convert values to floats
+        value = float(line)
+        x_data2.append(len(x_data2) + 1)  # Use an incremental index as x-axis values
+        y_data2.append(value)
+    except ValueError:
+        # Handle lines that are not valid floats
+        print(f"Skipping line in file 2: {line}")
+
+# Create a simple plot for the first file
+plt.plot(x_data1, y_data1, label='Data from file 1')
+
+# Add data from the second file to the same plot
+plt.plot(x_data2, y_data2, label='Data from file 2')
+
+# Add labels to the axes
+plt.xlabel('X-axis Label')
+plt.ylabel('Y-axis Label')
+
+# Add a legend
+plt.legend()
+
+# Display the plot
+plt.show()
