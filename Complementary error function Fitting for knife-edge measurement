@@ -1,0 +1,123 @@
+import os
+import pandas as pd
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy.special import erfc
+
+def erfc_model(x, amplitude, mean, stddev, offset, min_value=0):
+    """
+    Defines the model function based on the complementary error function (erfc) with adjustments.
+
+    Parameters:
+    - x: The independent variable.
+    - amplitude: Scales the height of the curve.
+    - mean: Shifts the curve along the x-axis, determining the center of the curve.
+    - stddev: Controls the spread or width of the curve.
+    - offset: Adds a constant value to the curve, shifting it up or down.
+    - min_value: An optional parameter setting a minimum value for the curve to ensure it does not go below this value.
+
+    Returns:
+    - The value of the erfc model function for each x, ensuring it does not drop below min_value.
+    """
+    return np.maximum(amplitude * erfc((x - mean) / (stddev)) + offset, min_value)
+
+def plot_and_fit_erfc(file_path, starting_position, ending_position, interval, fit_start, fit_end):
+    """
+    Loads data, performs curve fitting with the erfc model, and plots the results.
+
+    Parameters:
+    - file_path: Path to the Excel file containing the data.
+    - starting_position, ending_position: The range of positions for data selection.
+    - interval: The interval between data points.
+    - fit_start, fit_end: Indices to define the range for curve fitting.
+    """
+    # Load data from the specified Excel file
+    data = pd.read_excel(file_path)
+
+    # Extract 'count' and 'power' columns, converting power to millijoules
+    counts = data['count']
+    power_readings = data['power'] * 1000
+
+    # Calculate the total number of counts and define the structure of grouped data
+    total_counts = len(counts)
+    num_rows = int((ending_position - starting_position) / interval) + 1
+    num_columns = math.ceil(total_counts / num_rows)
+    grouped_data_array = np.full((num_rows, num_columns), np.nan)
+
+    # Populate the grouped data array with power readings
+    for i in range(num_rows):
+        start_index = i * num_columns
+        end_index = min(start_index + num_columns, total_counts)
+        grouped_data_array[i, :end_index - start_index] = power_readings[start_index:end_index]
+
+    # Prepare data for fitting
+    first_array = np.arange(0, num_rows * interval, interval)
+    second_array = np.nanmean(grouped_data_array, axis=1)
+    standard_deviation = np.nanstd(grouped_data_array, axis=1)
+    fit_range = slice(fit_start, fit_end)
+
+    # Fit the complementary error function to the selected data range
+    popt, pcov = curve_fit(erfc_model, first_array[fit_range], second_array[fit_range], p0=[1, np.median(first_array[fit_range]), np.std(first_array[fit_range]), np.mean(second_array[fit_range]), 0.00])
+
+    # Calculate the uncertainties of the optimized parameters
+    popt_uncertainties = np.sqrt(np.diag(pcov))
+
+    # Print the optimized parameters and their uncertainties in a table
+    parameter_names = ['Amplitude', 'Mean', 'Standard Deviation', 'Offset', 'Minimum Value']
+    popt_df = pd.DataFrame({'Parameter': parameter_names, 'Value': popt, 'Uncertainty': popt_uncertainties})
+    print(popt_df)
+
+    # Extracting the standard deviation from popt
+    stddev = popt[2]
+
+    # Calculating the beam waist
+    beam_waist = stddev * np.sqrt(2)
+
+    # Print the optimized parameters
+    print("Optimized Parameters (popt):", popt)
+
+    # Plot original data and the fitted curve
+    plt.figure(figsize=(10, 6))
+    plt.plot(first_array, second_array, marker='o', linestyle='-', color='b', label='Median Power Readings')
+    fitted_values = erfc_model(first_array, *popt)
+    plt.plot(first_array, fitted_values, marker='x', linestyle='-', color='r', label='Fitted Complementary Error Function')
+    extended_range = np.arange(first_array[0], first_array[-1] + 2, interval)
+    extended_fitted_values = erfc_model(extended_range, *popt)
+    plt.plot(extended_range, extended_fitted_values, marker='', linestyle='-', color='r')
+
+    # Calculate standard error
+    num_obs = np.sum(~np.isnan(grouped_data_array), axis=1)
+    standard_error = standard_deviation / np.sqrt(num_obs)
+
+    # Calculating the uncertainty of the beam waist using standard error of the standard deviation
+    stddev_error = standard_error[fit_range].mean()
+    beam_waist_uncertainty = stddev_error * np.sqrt(2)
+
+    # Printing the beam waist with its uncertainty
+    print("Beam Waist:", beam_waist, "+/-", beam_waist_uncertainty)
+
+    # Project error bars using standard error
+    plt.errorbar(first_array, second_array, yerr=standard_error, fmt='none', ecolor='black', capsize=5)
+   
+    # Add legend, labels, and title
+    plt.legend(['Mean Power Readings', 'Fitted Complementary Error Function', 'Extended Fitted Curve', 'Error Bars'], loc='lower left')
+    plt.xlabel('Relative Displacement of Knife Edge')
+    plt.ylabel('Mean Power Reading (mW)')
+    plt.title('Mean Power Readings with Complementary Error Function Fit')
+
+    # Add uncertainty of the beam waist to the plot
+    plt.text(0.05, 0.25, f'Beam Waist: {beam_waist:.2f} +/- {beam_waist_uncertainty:.2f} mm ', transform=plt.gca().transAxes, fontsize=12, verticalalignment='top', color='black')
+
+    plt.grid(True)
+    plt.show()
+
+# Define the file path, starting and ending positions, and interval size
+file_path = r'C:\Users\alast\Desktop\knife_data\4_03\data_3\finaldata.xlsx'
+starting_position = 13
+ending_position = 22
+interval = 0.2
+
+# Execute the function with fit_start and fit_end
+plot_and_fit_erfc(file_path, starting_position, ending_position, interval, fit_start=0, fit_end=None)
