@@ -1,0 +1,73 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+
+# Define the path to the Excel file
+file_path = 'C:\\Users\\alast\\Desktop\\FYP CCD\\before_telescope_beamprofile.xlsx'
+
+# Read the Excel file into a DataFrame
+data = pd.read_excel(file_path)
+
+# Extract the x and y values
+x_values = data.iloc[:, 0]
+y_values = data.iloc[:, 1]
+
+# Convert x values from micrometers to millimeters
+x_values_mm = x_values / 1000
+
+# Define the Gaussian function with an offset
+def gaussian_with_offset(x, amplitude, mean, stddev, offset):
+    return amplitude * np.exp(-((x - mean) ** 2) / (2 * stddev ** 2)) + offset
+
+# Fit the Gaussian function with offset to the data
+try:
+    initial_guess = [100, np.mean(x_values_mm), 1, min(y_values)]
+    popt, pcov = curve_fit(gaussian_with_offset, x_values_mm, y_values, p0=initial_guess)
+    
+    # Calculate the standard deviations (uncertainties) of the fitted parameters
+    perr = np.sqrt(np.diag(pcov))
+    amplitude_err, mean_err, stddev_err, offset_err = perr
+    
+    # Extract the fitted parameters
+    amplitude, mean, stddev, offset = popt
+    
+    # Calculate the beam waist (1/e^2 definition)
+    beam_waist = 2 * stddev
+    
+    # Calculate the uncertainty in the beam waist
+    beam_waist_err = beam_waist * 0.05
+    
+    # Plot the original data and the fitted Gaussian curve with x-axis in mm
+    plt.figure(figsize=(10, 6))
+    
+    # Plot the original data
+    plt.plot(x_values_mm, y_values, 'o', label='Original Data')
+    
+    # Plot the fitted Gaussian curve with offset (thicker and red)
+    x_fit = np.linspace(min(x_values_mm), max(x_values_mm), 1000)
+    plt.plot(x_fit, gaussian_with_offset(x_fit, *popt), '-', color='red', linewidth=2, label='Fitted Gaussian with Offset')
+    
+    # Plot the line at 1/e^2 intensity
+    plt.axhline(y=max(y_values) / np.exp(2), color='green', linestyle='--', label='1/e^2 Intensity')
+    
+    # Plot the beam waist value and uncertainty on the graph
+    plt.text(-3.5, max(y_values) / np.exp(2) + 2.5, f'Beam Waist: {beam_waist:.2f} mm ± \n{beam_waist_err:.2f} mm', fontsize=12)
+    
+    plt.xlabel('X Position (mm)')
+    plt.ylabel('Intensity')
+    plt.title('Gaussian Fit to Beam Profile of Incident Beam using CCD')
+    #plt.title('Gaussian Fit to Beam Profile of Focused Beam using CCD')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    # Print the fitted parameters and their uncertainties
+    print("Fitted Parameters:")
+    print(f"  Amplitude: {amplitude:.5f} ± {amplitude_err:.5f}")
+    print(f"  Mean: {mean:.5f} ± {mean_err:.5f} mm")
+    print(f"  Standard Deviation (Beam Waist): {stddev:.5f} ± {stddev_err:.5f} mm")
+    print(f"  Offset: {offset:.5f} ± {offset_err:.5f}")
+    
+except RuntimeError:
+    print("Error: Curve fitting failed")
